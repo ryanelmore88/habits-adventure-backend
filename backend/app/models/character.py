@@ -9,6 +9,10 @@ class CharacterSummary(BaseModel):
     id: str
     name: str
 
+def generate_character_id() -> str:
+    """Generate a unique character ID that fits within a 64-bit integer."""
+    return str(uuid.uuid4().int % (2**63))
+
 def list_characters() -> list[CharacterSummary]:
     # Project each Character vertex into just id & name
     query = (
@@ -31,39 +35,54 @@ def list_characters() -> list[CharacterSummary]:
 
 def create_character(name: str, strength: int, dexterity: int, constitution: int,
                      intelligence: int, wisdom: int, charisma: int):
+    # Add input validation
+    if not name or not name.strip():
+        raise ValueError("Character name cannot be empty")
 
-    # Generate a unique character ID that fits in a 64-bit integer
-    character_id = str(uuid.uuid4().int % (2**63))
+    for attr_name, value in [("strength", strength), ("dexterity", dexterity),
+                             ("constitution", constitution), ("intelligence", intelligence),
+                             ("wisdom", wisdom), ("charisma", charisma)]:
+        if not isinstance(value, int) or value < 1 or value > 30:
+            raise ValueError(f"{attr_name} must be between 1 and 30")
 
-    # Create an Attribute instance for each parameter
-    strength_attr = Attribute('strength', strength)
-    dexterity_attr = Attribute('dexterity', dexterity)
-    constitution_attr = Attribute('constitution', constitution)
-    intelligence_attr = Attribute('intelligence', intelligence)
-    wisdom_attr = Attribute('wisdom', wisdom)
-    charisma_attr = Attribute('charisma', charisma)
+    try:
+        # Generate a unique character ID that fits in a 64-bit integer
+        character_id = generate_character_id()
 
-    # Build the Gremlin query string for creating a Character vertex
-    query = (
-        f"g.addV('Character')"
-        f".property({T.id}, '{character_id}')"
-        f".property('name', '{name}')"
-        f".property('id', '{character_id}')"
-        f".property('strength', {strength_attr.base_score})"
-        f".property('strength_habit_points', {strength_attr.habit_points})"
-        f".property('dexterity', {dexterity_attr.base_score})"
-        f".property('dexterity_habit_points', {dexterity_attr.habit_points})"
-        f".property('constitution', {constitution_attr.base_score})"
-        f".property('constitution_habit_points', {constitution_attr.habit_points})"
-        f".property('intelligence', {intelligence_attr.base_score})"
-        f".property('intelligence_habit_points', {intelligence_attr.habit_points})"
-        f".property('wisdom', {wisdom_attr.base_score})"
-        f".property('wisdom_habit_points', {wisdom_attr.habit_points})"
-        f".property('charisma', {charisma_attr.base_score})"
-        f".property('charisma_habit_points', {charisma_attr.habit_points})"
-    )
-    result = run_query(query)
-    return result
+        # Create an Attribute instance for each parameter
+        strength_attr = Attribute('strength', strength)
+        dexterity_attr = Attribute('dexterity', dexterity)
+        constitution_attr = Attribute('constitution', constitution)
+        intelligence_attr = Attribute('intelligence', intelligence)
+        wisdom_attr = Attribute('wisdom', wisdom)
+        charisma_attr = Attribute('charisma', charisma)
+
+        # Build the Gremlin query string for creating a Character vertex
+        query = (
+            f"g.addV('Character')"
+            f".property({T.id}, '{character_id}')"
+            f".property('name', '{name}')"
+            f".property('id', '{character_id}')"
+            f".property('strength', {strength_attr.base_score})"
+            f".property('strength_habit_points', {strength_attr.habit_points})"
+            f".property('dexterity', {dexterity_attr.base_score})"
+            f".property('dexterity_habit_points', {dexterity_attr.habit_points})"
+            f".property('constitution', {constitution_attr.base_score})"
+            f".property('constitution_habit_points', {constitution_attr.habit_points})"
+            f".property('intelligence', {intelligence_attr.base_score})"
+            f".property('intelligence_habit_points', {intelligence_attr.habit_points})"
+            f".property('wisdom', {wisdom_attr.base_score})"
+            f".property('wisdom_habit_points', {wisdom_attr.habit_points})"
+            f".property('charisma', {charisma_attr.base_score})"
+            f".property('charisma_habit_points', {charisma_attr.habit_points})"
+        )
+        result = run_query(query)
+        if not result:
+            raise RuntimeError("Failed to create Character vertex")
+        return result
+    except Exception as e:
+        print(f"Error creating Character: {e}")
+        raise e
 
 def get_basic_character(character_id: str):
     # Build a Gremlin query that retrieves a vertex by its id and returns all properties
@@ -83,14 +102,21 @@ def delete_character(character_id: str):
     return {"status": "success", "message": f"Character {character_id} deleted."}
 
 def get_character(character_id: str):
-    # Build a Gremlin query to fetch the character's properties.
-    query = f"g.V('{character_id}').elementMap()"
-    result = run_query(query)
-    if not result:
-        return None
+    if not character_id or not character_id.strip():
+        raise ValueError("Invalid character ID")
 
-    # Assume result[0] is a dictionary of properties.
-    char_data = result[0]
+    try:
+        # Build a Gremlin query to fetch the character's properties.
+        query = f"g.V('{character_id}').elementMap()"
+        result = run_query(query)
+        if not result:
+            return None
+
+        # Assume result[0] is a dictionary of properties.
+        char_data = result[0]
+    except Exception as e:
+        print(f"Error fetching character {character_id}: {e}")
+        raise
 
     # Sometimes the properties returned by valueMap(true) are lists.
     def extract_value(value):

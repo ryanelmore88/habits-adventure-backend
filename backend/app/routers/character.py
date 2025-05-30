@@ -1,6 +1,3 @@
-import datetime
-from unittest import result
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.models.character import create_character, get_character, get_basic_character, delete_character, update_character_habit_score, list_characters, CharacterSummary
@@ -24,27 +21,37 @@ class HabitUpdateRequest(BaseModel):
 # POST endpoint for creating a character
 @router.post("/character", summary="Create a new character")
 def add_character(character: CharacterCreateRequest):
-    # Call the model function to create a character node in Neptune
-    result = create_character(
-        character.name,
-        character.strength,
-        character.dexterity,
-        character.constitution,
-        character.intelligence,
-        character.wisdom,
-        character.charisma,
-    )
-    if not result:
-        raise HTTPException(status_code=500, detail="Failed to create new character")
-    return {"status": "success", "data": result}
+    try:
+        # Call the model function to create a character node in Neptune
+        result = create_character(
+            character.name,
+            character.strength,
+            character.dexterity,
+            character.constitution,
+            character.intelligence,
+            character.wisdom,
+            character.charisma,
+        )
+        return {"status": "success", "data": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Unexpected error creating character: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # GET endpoint to retrieve a character by ID
 @router.get("/character/{character_id}", summary="Get a character based on ID")
 def read_character(character_id: str):
-    result = get_character(character_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Character not found")
-    return { "status": "success", "data": result }
+    try:
+        result = get_character(character_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Character not found")
+        return {"status": "success", "data": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Unexpected error fetching character: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # DELETE endpoint to remove a character by ID
 @router.delete("/character/{character_id}", summary="Delete a character by ID")

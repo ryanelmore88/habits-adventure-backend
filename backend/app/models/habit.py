@@ -7,6 +7,10 @@ from gremlin_python.process.traversal import T
 from app.models.completion import create_completion
 
 
+def generate_habit_id() -> str:
+    """Generate a unique habit ID that fits in a 64-bit integer."""
+    return str(uuid.uuid4().int % (2**63))
+
 def create_habit(character_id: str, habit_name: str, attribute: str, description: str = ""):
     """
     Create a Habit vertex and link it to the Character vertex.
@@ -17,30 +21,46 @@ def create_habit(character_id: str, habit_name: str, attribute: str, description
 
     Returns a dictionary with the habit_id and the query result.
     """
-    # Generate a unique numeric habit ID that fits within 64 bits.
-    habit_id = str(uuid.uuid4().int % (2 ** 63))
-    # Initialize completion_history as an empty JSON array.
-    completions = "[]"
 
-    # Build the Gremlin query.
-    # Note: Use proper quotes for string values. If habit_name or description contain special characters,
-    # consider escaping them or using a more robust query builder.
-    query = (
-        f"g.addV('Habit')"
-        f".property({T.id}, '{habit_id}')"
-        f".property('habit_id', '{habit_id}')"
-        f".property('character_id', {character_id})"
-        f".property('habit_name', '{habit_name}')"
-        f".property('attribute', '{attribute.lower()}')"
-        f".property('description', '{description}')"
-        f".property('completion_history', '{completions}')"
-        f".as('h')"                                    # Label this vertex as 'h'
-        f".V({character_id}).addE('hasHabit').to('h')" # Find the character vertex and add an edge labeled 'hasHabit' from the habit ('h') to it.
-    )
-    print(f"Created Habit {habit_id}, {attribute}, {description}")
-    result = run_query(query)
-    return {"habit_id": habit_id, "result": result}
+    # Input validation
+    if not character_id or not character_id.strip():
+        raise ValueError("Character ID cannot be empty")
+    if not habit_name or not habit_name.strip():
+        raise ValueError("Habit name cannot be empty")
+    if not attribute or not attribute.strip():
+        raise ValueError("Attribute cannot be empty")
 
+    valid_attributes = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+    if attribute.lower() not in valid_attributes:
+        raise ValueError(f"Attribute must be one of: {', '.join(valid_attributes)}")
+
+    try:
+        habit_id = generate_habit_id
+        # Initialize completion_history as an empty JSON array.
+        completions = "[]"
+
+        # Build the Gremlin query.
+        # Note: Use proper quotes for string values. If habit_name or description contain special characters,
+        # consider escaping them or using a more robust query builder.
+        query = (
+            f"g.addV('Habit')"
+            f".property({T.id}, '{habit_id}')"
+            f".property('habit_id', '{habit_id}')"
+            f".property('character_id', {character_id})"
+            f".property('habit_name', '{habit_name}')"
+            f".property('attribute', '{attribute.lower()}')"
+            f".property('description', '{description}')"
+            f".property('completion_history', '{completions}')"
+            f".as('h')"  # Label this vertex as 'h'
+            f".V({character_id}).addE('hasHabit').to('h')"
+            # Find the character vertex and add an edge labeled 'hasHabit' from the habit ('h') to it.
+        )
+        print(f"Created Habit {habit_id}, {attribute}, {description}")
+        result = run_query(query)
+        return {"habit_id": habit_id, "result": result}
+    except Exception as e:
+        print(f"Error creating Habit: {e}")
+        raise e
 
 def update_habit_completion(habit_id: str, completion_date: str = None, completed: bool = True):
     # Default to today's date if not provided.
