@@ -35,7 +35,7 @@ def create_habit(character_id: str, habit_name: str, attribute: str, description
         raise ValueError(f"Attribute must be one of: {', '.join(valid_attributes)}")
 
     try:
-        habit_id = generate_habit_id
+        habit_id = generate_habit_id()
         # Initialize completion_history as an empty JSON array.
         completions = "[]"
 
