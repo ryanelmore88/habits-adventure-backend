@@ -14,20 +14,18 @@ def generate_character_id() -> str:
     return str(uuid.uuid4().int % (2**63))
 
 def list_characters() -> list[CharacterSummary]:
-    # Project each Character vertex into just id & name
+    # Use custom character_id property instead of T.id
     query = (
-        "g."
-        "V().hasLabel('Character')"
-        ".project('id','name')"
-        ".by(T.id).by('name')"
+        "g.V().hasLabel('Character')"
+        ".project('character_id','name')"
+        ".by('character_id').by('name')"
     )
     results = run_query(query)
     summaries = []
     for row in results:
-        # row will be a dict like {'id': 12345, 'name': 'Vigil'}
         summaries.append(
             CharacterSummary(
-                id=str(row['id']),
+                id=str(row['character_id']),  # FIXED: Use 'character_id' key
                 name=row['name']
             )
         )
@@ -60,9 +58,8 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
         # Build the Gremlin query string for creating a Character vertex
         query = (
             f"g.addV('Character')"
-            f".property({T.id}, '{character_id}')"
             f".property('name', '{name}')"
-            f".property('id', '{character_id}')"
+            f".property('character_id', '{character_id}')"  # FIXED: Use character_id consistently
             f".property('strength', {strength_attr.base_score})"
             f".property('strength_habit_points', {strength_attr.habit_points})"
             f".property('dexterity', {dexterity_attr.base_score})"
@@ -85,20 +82,18 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
         raise e
 
 def get_basic_character(character_id: str):
-    # Build a Gremlin query that retrieves a vertex by its id and returns all properties
-    query = f"g.V('{character_id}').valueMap(true)"
+    # Query by custom property
+    query = f"g.V().hasLabel('Character').has('character_id', '{character_id}').valueMap(true)"
     result = run_query(query)
     return result
 
 def delete_character(character_id: str):
     """
     Delete a character vertex from the graph database using its ID.
-
-    This function builds a Gremlin query that finds the vertex by its ID and drops it.
     """
-    query = f"g.V('{character_id}').drop()"
+    # Query by custom property
+    query = f"g.V().hasLabel('Character').has('character_id', '{character_id}').drop()"
     run_query(query)
-    # Since drop() returns an empty list on success, we consider that a success.
     return {"status": "success", "message": f"Character {character_id} deleted."}
 
 def get_character(character_id: str):
@@ -107,7 +102,7 @@ def get_character(character_id: str):
 
     try:
         # Build a Gremlin query to fetch the character's properties.
-        query = f"g.V('{character_id}').elementMap()"
+        query = f"g.V().hasLabel('Character').has('character_id', '{character_id}').elementMap()"
         result = run_query(query)
         if not result:
             return None
@@ -122,7 +117,8 @@ def get_character(character_id: str):
     def extract_value(value):
         return value[0] if isinstance(value, list) else value
 
-    char_id = extract_value(char_data.get("id"))
+    # FIXED: Look for character_id in the data (not 'id')
+    char_id = extract_value(char_data.get("character_id"))
     name = extract_value(char_data.get("name"))
 
     # List the attributes we care about.
@@ -162,9 +158,8 @@ def update_character_habit_score(character_id: str, attribute: str, habit_points
     attr_lower_case = attribute.lower()
     property_key = f"{attr_lower_case}_habit_points"
 
-    # Query to get the current habit points value.
-    # Note: Using values() returns a list, so we extract the first element.
-    get_query = f"g.V('{character_id}').values('{property_key}')"
+    # FIXED: Use custom property lookup instead of T.id
+    get_query = f"g.V().hasLabel('Character').has('character_id', '{character_id}').values('{property_key}')"
     current_values = run_query(get_query)
 
     if current_values and len(current_values) > 0:
@@ -179,13 +174,11 @@ def update_character_habit_score(character_id: str, attribute: str, habit_points
     #Calculate the new total habit points.
     updated_total = current_value + habit_points_increase_value
 
-    # Build the Gremlin query. For example, if the attribute is 'Strength',
-    # the property key would be strength_habit_points
+    # FIXED: Use custom property lookup for update
     query_update = (
-        f"g.V('{character_id}')"
+        f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
         f".property('{property_key}', '{updated_total}')"
     )
 
     result = run_query(query_update)
-    
-    # Does this need a return
+    return result

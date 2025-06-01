@@ -1,4 +1,5 @@
-# backend/app/main.py
+# backend/app/main.py - SECURE CORS FIX
+
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -9,7 +10,6 @@ from .routers import character, habit
 environment = os.getenv("ENVIRONMENT", "development")
 env_file = f".env.{environment}"
 
-# Try to load environment-specific file, fallback to .env
 if os.path.exists(env_file):
     load_dotenv(env_file)
     print(f"Loaded environment config from {env_file}")
@@ -22,6 +22,7 @@ app = FastAPI(
     debug=os.getenv("DEBUG", "false").lower() == "true"
 )
 
+
 @app.get("/health")
 def health_check():
     return {
@@ -31,34 +32,89 @@ def health_check():
         "app_name": os.getenv("APP_NAME")
     }
 
-# CORS Configuration
-IS_DEVELOPMENT = os.getenv("ENVIRONMENT", "development") == "development"
 
-if IS_DEVELOPMENT:
-    # In development, check if we want to allow all origins
-    allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
-    if allowed_origins_env == "*":
-        ALLOWED_ORIGINS = ["*"]
-        print("CORS: Allowing all origins (development mode)")
-    else:
-        ALLOWED_ORIGINS = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
-        print(f"CORS: Allowing specific origins: {ALLOWED_ORIGINS}")
-else:
-    # Production - always use specific origins
-    origins_string = os.getenv("ALLOWED_ORIGINS", "")
-    ALLOWED_ORIGINS = [origin.strip() for origin in origins_string.split(",") if origin.strip()]
-    print(f"CORS: Production mode, allowing: {ALLOWED_ORIGINS}")
+# SECURE CORS Configuration
+def get_cors_origins():
+    """
+    Get CORS origins with security validation
+    Never allows wildcard (*) in any environment
+    """
+    environment = os.getenv("ENVIRONMENT", "development")
+    origins_env = os.getenv("ALLOWED_ORIGINS", "")
 
+    if not origins_env or origins_env.strip() == "":
+        # Default safe origins for development
+        default_origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",  # Common React dev port
+            "http://127.0.0.1:3000"
+        ]
+        print(f"CORS: No origins specified, using defaults: {default_origins}")
+        return default_origins
+
+    # Parse origins and validate
+    origins = [origin.strip() for origin in origins_env.split(",") if origin.strip()]
+
+    # Security check - never allow wildcard
+    if "*" in origins:
+        raise ValueError(
+            "Wildcard CORS (*) is not allowed for security reasons. "
+            "Please specify explicit origins in ALLOWED_ORIGINS."
+        )
+
+    # Validate each origin format
+    valid_origins = []
+    for origin in origins:
+        # Basic URL validation
+        if not (origin.startswith("http://") or origin.startswith("https://")):
+            print(f"CORS WARNING: Origin '{origin}' should include protocol (http:// or https://)")
+            continue
+
+        # Remove trailing slashes for consistency
+        clean_origin = origin.rstrip("/")
+        valid_origins.append(clean_origin)
+
+    if not valid_origins:
+        raise ValueError(
+            "No valid CORS origins found. Please check ALLOWED_ORIGINS format. "
+            "Expected format: 'http://localhost:5173,https://mydomain.com'"
+        )
+
+    print(f"CORS: Environment={environment}, Valid origins: {valid_origins}")
+    return valid_origins
+
+
+# Get CORS origins with validation
+try:
+    ALLOWED_ORIGINS = get_cors_origins()
+except ValueError as e:
+    print(f"CORS Configuration Error: {e}")
+    # Exit early to prevent insecure startup
+    exit(1)
+
+# Apply CORS middleware with secure defaults
 app.add_middleware(
-    CORSMiddleware,  # type: ignore
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,  # Explicit origins only
+    allow_credentials=True,  # Allow cookies/auth headers
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Explicit methods
+    allow_headers=[  # Explicit headers
+        "Accept",
+        "Accept-Language",
+        "Content-Language",
+        "Content-Type",
+        "Authorization"
+    ],
+    expose_headers=[],  # Don't expose extra headers
+    max_age=600,  # Cache preflight for 10 minutes
 )
 
-# Optional: Add debug endpoints in development
-if IS_DEVELOPMENT and os.getenv("ENABLE_DEBUG_ENDPOINTS", "false").lower() == "true":
+# Debug endpoints (only in development with explicit flag)
+IS_DEVELOPMENT = os.getenv("ENVIRONMENT", "development") == "development"
+ENABLE_DEBUG = os.getenv("ENABLE_DEBUG_ENDPOINTS", "false").lower() == "true"
+
+if IS_DEVELOPMENT and ENABLE_DEBUG:
     @app.get("/debug/env")
     def debug_env():
         return {
@@ -67,6 +123,16 @@ if IS_DEVELOPMENT and os.getenv("ENABLE_DEBUG_ENDPOINTS", "false").lower() == "t
             "cors_origins": ALLOWED_ORIGINS,
             "debug_mode": os.getenv("DEBUG"),
             "log_level": os.getenv("LOG_LEVEL")
+        }
+
+
+    @app.get("/debug/cors")
+    def debug_cors():
+        """Debug endpoint to test CORS configuration"""
+        return {
+            "message": "CORS is working!",
+            "allowed_origins": ALLOWED_ORIGINS,
+            "timestamp": "2025-01-01T00:00:00Z"
         }
 
 app.include_router(character.router, prefix="/api")

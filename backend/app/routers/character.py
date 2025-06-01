@@ -83,8 +83,7 @@ def update_attribute_habit(character_id: str, habit_update: HabitUpdateRequest):
 def read_habits_for_character(character_id: str):
     habits = get_all_habits(character_id)
     if not habits:
-        raise HTTPException(status_code=404, detail="No habits found for this character")
-
+        return {"status": "success", "data": [], "message": "No Habits have been created for this Character"}  # Empty is valid
     return { "status": "success", "data": habits }
 
 @router.get(

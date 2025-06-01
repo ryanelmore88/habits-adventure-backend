@@ -9,7 +9,8 @@ from app.models.completion import create_completion
 
 def generate_habit_id() -> str:
     """Generate a unique habit ID that fits in a 64-bit integer."""
-    return str(uuid.uuid4().int % (2**63))
+    return str(uuid.uuid4().int % (2 ** 63))
+
 
 def create_habit(character_id: str, habit_name: str, attribute: str, description: str = ""):
     """
@@ -17,7 +18,7 @@ def create_habit(character_id: str, habit_name: str, attribute: str, description
 
     - Generates a unique numeric habit_id.
     - Stores the habit_name, attribute, description, and an empty completion_history.
-    - Creates an edge 'hasHabit' from the Habit vertex to the Character vertex.
+    - Creates an edge 'hasHabit' from the Character vertex to the Habit vertex.
 
     Returns a dictionary with the habit_id and the query result.
     """
@@ -40,20 +41,16 @@ def create_habit(character_id: str, habit_name: str, attribute: str, description
         completions = "[]"
 
         # Build the Gremlin query.
-        # Note: Use proper quotes for string values. If habit_name or description contain special characters,
-        # consider escaping them or using a more robust query builder.
         query = (
             f"g.addV('Habit')"
-            f".property({T.id}, '{habit_id}')"
             f".property('habit_id', '{habit_id}')"
-            f".property('character_id', {character_id})"
+            f".property('character_id', '{character_id}')"
             f".property('habit_name', '{habit_name}')"
             f".property('attribute', '{attribute.lower()}')"
             f".property('description', '{description}')"
             f".property('completion_history', '{completions}')"
             f".as('h')"  # Label this vertex as 'h'
-            f".V({character_id}).addE('hasHabit').to('h')"
-            # Find the character vertex and add an edge labeled 'hasHabit' from the habit ('h') to it.
+            f".V().hasLabel('Character').has('character_id', '{character_id}').addE('hasHabit').to('h')"
         )
         print(f"Created Habit {habit_id}, {attribute}, {description}")
         result = run_query(query)
@@ -61,6 +58,7 @@ def create_habit(character_id: str, habit_name: str, attribute: str, description
     except Exception as e:
         print(f"Error creating Habit: {e}")
         raise e
+
 
 def update_habit_completion(habit_id: str, completion_date: str = None, completed: bool = True):
     # Default to today's date if not provided.
@@ -70,7 +68,7 @@ def update_habit_completion(habit_id: str, completion_date: str = None, complete
     # Debug: log the values
     print(f"Updating habit completion for habit_id: {habit_id} on {completion_date}, completed: {completed}")
 
-    # Instead of assuming habit_id is the vertex id, query by the 'habit_id' property.
+    # FIXED: Use custom property lookup with proper quoting
     query_find = (
         f"g.V().hasLabel('Habit').has('habit_id', '{habit_id}')"
         f".outE('hasCompletion').inV()"
@@ -93,11 +91,13 @@ def update_habit_completion(habit_id: str, completion_date: str = None, complete
         # No existing completion for this date—create a new completion vertex.
         return create_completion(habit_id, completion_date, completed)
 
+
 def get_habit(habit_id: str):
     """
     Retrieve a habit vertex and return its properties, including the parsed completion history.
     """
-    query = f"g.V('{habit_id}').elementMap()"
+    # Query by custom property
+    query = f"g.V().hasLabel('Habit').has('habit_id', '{habit_id}').elementMap()"
     result = run_query(query)
     if not result:
         return None
@@ -105,7 +105,6 @@ def get_habit(habit_id: str):
     habit_data = result[0]
 
     # Extract the JSON completion history and parse it.
-    import json
     completion_history = habit_data.get("completion_history")
     if isinstance(completion_history, list):
         # Sometimes the value may come wrapped in a list.
@@ -124,20 +123,24 @@ def get_habit(habit_id: str):
     }
     return habit
 
+
 def get_completions_for_habit(habit_id: str):
     """
     Retrieve all completion vertices associated with a habit.
     """
-    query = f"g.V('{habit_id}').outE('hasCompletion').inV().elementMap()"
+    # FIXED: Use custom property lookup
+    query = f"g.V().hasLabel('Habit').has('habit_id', '{habit_id}').outE('hasCompletion').inV().elementMap()"
     result = run_query(query)
-    # Process result as needed, e.g., parse JSON completion history if stored
     return result
 
+
 def get_habits_for_attribute(character_id: str, attribute: str):
-    query = f"g.V().hasLabel('Habit').has('character_id', {character_id}).has('attribute', '{attribute}').elementMap()"
+    # FIXED: Add quotes around character_id
+    query = f"g.V().hasLabel('Habit').has('character_id', '{character_id}').has('attribute', '{attribute}').elementMap()"
     result = run_query(query)
     print(f"Habits query result: ", result)
     return result
+
 
 def get_all_habits(character_id: str):
     """
@@ -145,69 +148,70 @@ def get_all_habits(character_id: str):
     This function traverses from the character vertex via the 'hasHabit' edge,
     then returns all habit vertices and their properties using elementMap().
     """
-    # This query starts at the character vertex, follows outgoing 'hasHabit' edges,
-    # and retrieves the habit vertices.
-    query = f"g.V().hasLabel('Habit').has('character_id').elementMap()"
+    # Use custom properties for traversal
+    query = (
+        f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
+        f".out('hasHabit').hasLabel('Habit').elementMap()"
+    )
     print(f"{character_id}: {query}")
     result = run_query(query)
     print(f"Habits query result: ", result)
     return result
 
+
 def delete_habit(habit_id: str):
     """
     Delete a habit vertex from the graph database using its ID.
     """
-    query = f"g.V({habit_id}).drop()"
+    # Query by custom property
+    query = f"g.V().hasLabel('Habit').has('habit_id', '{habit_id}').drop()"
     result = run_query(query)
     return result
+
 
 def get_current_week_completions(character_id: str, start_date: datetime, end_date: datetime):
+    """
+    Get all habit completions for a character within the specified date range
+    """
+    # Convert datetime objects to YYYY-MM-DD strings
+    start_date_str = start_date.strftime('%Y-%m-%d') if hasattr(start_date, 'strftime') else str(start_date)
+    end_date_str = end_date.strftime('%Y-%m-%d') if hasattr(end_date, 'strftime') else str(end_date)
+
+    # FIXED: Use proper custom property lookup and date formatting
     query = (
-        # For a single habit vertex, get all HabitCompletion vertices for the week:
-        f"g.V(character_id).out('hasHabit').as_('habit')"
+        f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
+        f".out('hasHabit').hasLabel('Habit').as('habit')"
         f".out('hasCompletion').hasLabel('HabitCompletion')"
-        f".has('completion_date', between(start_date, end_date)).as_('completion')"
+        f".has('completion_date', gte('{start_date_str}'))"
+        f".has('completion_date', lte('{end_date_str}'))"
+        f".as('completion')"
         f".select('habit', 'completion')"
         f".by(valueMap(true))"
-        f".by(valueMap())"
+        f".by(valueMap(true))"
     )
 
-    query = f"""
-    g.V('{character_id}')
-     .out('hasHabit').as('habit')
-     .out('hasCompletion').hasLabel('HabitCompletion')
-     .has('completion_date', between('{start_date}', '{end_date}'))
-     .as('completion')
-     .select('habit', 'completion')
-     .by(valueMap(true))
-     .by(valueMap())
-    """
-
     result = run_query(query)
-
     return result
 
+
 def get_current_day_completions(character_id: str, today: datetime):
-
-    query = f"""
-    g.V('{character_id}')
-     .out('hasHabit').as('habit')
-     .out('hasCompletion').hasLabel('HabitCompletion')
-     .has('completion_date', '{today}')
-     .as('completion')
-     .select('habit', 'completion')
-     .by(valueMap(true))
-     .by(valueMap())
     """
+    Get habit completions for a character for a specific day
+    """
+    # Convert datetime to string
+    today_str = today.strftime('%Y-%m-%d') if hasattr(today, 'strftime') else str(today)
 
-    single_query = f"g.V().hasLabel('Habit').has('character_id').elementMap()"
+    # FIXED: Use proper custom property lookup
+    query = (
+        f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
+        f".out('hasHabit').hasLabel('Habit').as('habit')"
+        f".out('hasCompletion').hasLabel('HabitCompletion')"
+        f".has('completion_date', '{today_str}')"
+        f".as('completion')"
+        f".select('habit', 'completion')"
+        f".by(valueMap(true))"
+        f".by(valueMap(true))"
+    )
 
-    second_query = {
-        f"g.V(habit_id).out('hasCompletion')"
-        f".hasLabel('HabitCompletion')"
-        f".has('completion_date', between(start_date, end_date))"
-        f".values('completion_date')"
-    }
     result = run_query(query)
-
     return result
