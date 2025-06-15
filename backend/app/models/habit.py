@@ -253,11 +253,15 @@ def delete_habit(habit_id: str):
 
 
 def get_current_week_completions(character_id: str, start_date: datetime, end_date: datetime):
-    """
-    Get all habit completions for a character within the specified date range
-    """
+    """Enhanced with path validation"""
     start_date_str = start_date.strftime('%Y-%m-%d') if hasattr(start_date, 'strftime') else str(start_date)
     end_date_str = end_date.strftime('%Y-%m-%d') if hasattr(end_date, 'strftime') else str(end_date)
+
+    # First, verify the character exists
+    char_check = f"g.V().hasLabel('Character').has('character_id', '{character_id}').count()"
+    if not run_query(char_check) or run_query(char_check)[0] == 0:
+        print(f"Character {character_id} not found")
+        return []
 
     query = (
         f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
@@ -272,7 +276,8 @@ def get_current_week_completions(character_id: str, start_date: datetime, end_da
     )
 
     result = run_query(query)
-    return result
+    print(f"Week completions query returned: {len(result) if result else 0} results")
+    return result or []
 
 
 def get_current_day_completions(character_id: str, today: datetime):

@@ -4,9 +4,9 @@ from app.models.habit import create_habit, update_habit_completion, get_habit, g
     get_habits_for_attribute, get_all_habits, delete_habit
 from app.models.completion import get_completion
 
-router = APIRouter()
+router = APIRouter(tags=["completion"])
 
-@router.get("/completion/{completion_id}", summary="Retrieve a habit completion")
+@router.get("/api/completion/{completion_id}", summary="Retrieve a habit completion")
 def read_completion(completion_id: str):
     completion = get_completion(completion_id)
     if not completion:

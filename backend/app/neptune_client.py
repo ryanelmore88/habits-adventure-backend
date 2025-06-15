@@ -35,3 +35,39 @@ def run_query(query: str) -> List[Any]:
     except Exception as e:
         logger.error(f"Error running query: {query}\nException: {e}")
         raise RuntimeError(f"Database query failed: {str(e)}")
+
+def debug_character_habits(character_id: str):
+    """Debug function to check Character -> Habit relationships"""
+    query = (
+        f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
+        f".out('hasHabit').hasLabel('Habit')"
+        f".valueMap('habit_id', 'habit_name')"
+    )
+    result = run_query(query)
+    print(f"Habits for character {character_id}: {result}")
+    return result
+
+def debug_habit_completions(habit_id: str):
+    """Debug function to check Habit -> Completion relationships"""
+    query = (
+        f"g.V().hasLabel('Habit').has('habit_id', '{habit_id}')"
+        f".out('hasCompletion').hasLabel('HabitCompletion')"
+        f".valueMap('completion_date', 'completed')"
+    )
+    result = run_query(query)
+    print(f"Completions for habit {habit_id}: {result}")
+    return result
+
+def debug_full_path(character_id: str):
+    """Debug the full Character -> Habit -> Completion path"""
+    query = (
+        f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
+        f".out('hasHabit').hasLabel('Habit').as('habit')"
+        f".out('hasCompletion').hasLabel('HabitCompletion').as('completion')"
+        f".select('habit', 'completion')"
+        f".by(valueMap('habit_id', 'habit_name'))"
+        f".by(valueMap('completion_date', 'completed'))"
+    )
+    result = run_query(query)
+    print(f"Full path for character {character_id}: {result}")
+    return result

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.models.character import get_character, update_character_hp
 from app.neptune_client import run_query
 
-router = APIRouter(prefix="/api/adventure", tags=["adventure"])
+router = APIRouter(prefix="/adventure", tags=["adventure"])
 
 
 # Pydantic models for request/response validation
@@ -168,7 +168,7 @@ def validate_adventure_results(results: dict) -> dict:
 
 
 # API Endpoints
-@router.post("/adventure/{character_id}/complete", response_model=AdventureResponse)
+@router.post("/{character_id}/complete", response_model=AdventureResponse)
 def complete_adventure(character_id: str, results: AdventureResults) -> AdventureResponse:
     """
     Called once when adventure is complete
@@ -237,7 +237,7 @@ def complete_adventure(character_id: str, results: AdventureResults) -> Adventur
         raise HTTPException(status_code=500, detail="Failed to complete adventure")
 
 
-@router.get("/adventure/enemy-templates")
+@router.get("/enemy-templates")
 def get_enemy_templates():
     """
     Get available enemy templates for frontend combat
@@ -287,7 +287,7 @@ def get_enemy_templates():
     }
 
 
-@router.get("/adventure/{character_id}/status")
+@router.get("/{character_id}/status")
 def get_adventure_status(character_id: str):
     """
     Get character's current adventure-related status

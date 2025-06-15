@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from app.models.character import create_character, get_character, get_basic_character, delete_character, update_character_habit_score, list_characters, CharacterSummary
 from app.models.habit import get_all_habits
 
-router = APIRouter()
+router = APIRouter(tags=["character"])
 
 class CharacterCreateRequest(BaseModel):
     name: str

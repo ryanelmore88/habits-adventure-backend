@@ -59,7 +59,7 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
         query = (
             f"g.addV('Character')"
             f".property('name', '{name}')"
-            f".property('character_id', '{character_id}')"  # FIXED: Use character_id consistently
+            f".property('character_id', '{character_id}')"
             f".property('strength', {strength_attr.base_score})"
             f".property('strength_habit_points', {strength_attr.habit_points})"
             f".property('dexterity', {dexterity_attr.base_score})"

@@ -6,7 +6,7 @@ from app.models.habit import create_habit, update_habit_completion, get_habit, g
     get_habits_for_attribute, get_all_habits, delete_habit, get_current_week_completions, get_current_day_completions
 from app.models.completion import get_completion
 
-router = APIRouter()
+router = APIRouter(tags=["habit"])
 
 class HabitCreateRequest(BaseModel):
     character_id: str

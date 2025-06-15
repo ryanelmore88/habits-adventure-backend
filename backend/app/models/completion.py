@@ -17,12 +17,12 @@ def create_completion(habit_id: str, completion_date: str, completed: bool = Tru
     # Note: Wrap string values in quotes.
     query = (
         f"g.addV('HabitCompletion')"
-        f".property({T.id}, '{completion_id}')"
+        f".property(id, '{completion_id}')"
         f".property('completion_date', '{completion_date}')"
         f".property('completed', {str(completed).lower()})"
-        f".as('c')"
-        f".V('{habit_id}').addE('hasCompletion').to('c')"
-        f".V('{completion_id}').addE('hasCompletion').to('c')"
+        f".as('completion')"
+        f".V().hasLabel('Habit').has('habit_id', '{habit_id}')"
+        f".addE('hasCompletion').to('completion')"
         f".iterate()"
     )
 
