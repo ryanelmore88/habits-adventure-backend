@@ -182,3 +182,50 @@ def update_character_habit_score(character_id: str, attribute: str, habit_points
 
     result = run_query(query_update)
     return result
+
+
+def update_character_hp(character_id: str, hp_change: int) -> dict:
+    """
+    Update character's HP by a given amount
+    """
+    try:
+        # Import here to avoid circular imports
+        from app.neptune_client import run_query
+
+        # Get current HP and max HP
+        get_query = (
+            f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
+            f".project('current_hp', 'max_hp')"
+            f".by(coalesce(values('current_hp'), constant(0)))"
+            f".by(coalesce(values('max_hp'), constant(20)))"
+        )
+        result = run_query(get_query)
+
+        if not result:
+            raise ValueError("Character not found")
+
+        current_hp = result[0].get('current_hp', 0)
+        max_hp = result[0].get('max_hp', 20)
+
+        # Calculate new HP (can't go below 0 or above max)
+        new_hp = max(0, min(max_hp, current_hp + hp_change))
+
+        # Update in database
+        update_query = (
+            f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
+            f".property('current_hp', {new_hp})"
+        )
+        run_query(update_query)
+
+        return {
+            "character_id": character_id,
+            "previous_hp": current_hp,
+            "current_hp": new_hp,
+            "max_hp": max_hp,
+            "hp_change": hp_change,
+            "actual_change": new_hp - current_hp
+        }
+
+    except Exception as e:
+        print(f"Error updating character HP: {e}")
+        raise e

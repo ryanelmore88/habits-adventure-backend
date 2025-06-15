@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import character, habit
+from .routers import character, habit, adventure
 
 # Load environment-specific .env file
 environment = os.getenv("ENVIRONMENT", "development")
@@ -137,3 +137,5 @@ if IS_DEVELOPMENT and ENABLE_DEBUG:
 
 app.include_router(character.router, prefix="/api")
 app.include_router(habit.router, prefix="/api")
+
+app.include_router(adventure.router, prefix="/api")
