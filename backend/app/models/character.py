@@ -1,4 +1,5 @@
 # backend/app/models/character.py
+import base64
 import uuid
 from gremlin_python.process.traversal import T
 from app.neptune_client import run_query
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 class CharacterSummary(BaseModel):
     id: str
     name: str
+    image_url: str = None # Allow users to add an avatar for their character.
 
 def generate_character_id() -> str:
     """Generate a unique character ID that fits within a 64-bit integer."""
@@ -32,7 +34,7 @@ def list_characters() -> list[CharacterSummary]:
     return summaries
 
 def create_character(name: str, strength: int, dexterity: int, constitution: int,
-                     intelligence: int, wisdom: int, charisma: int):
+                     intelligence: int, wisdom: int, charisma: int, image_data: str = None):
     # Add input validation
     if not name or not name.strip():
         raise ValueError("Character name cannot be empty")
@@ -42,6 +44,18 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
                              ("wisdom", wisdom), ("charisma", charisma)]:
         if not isinstance(value, int) or value < 1 or value > 30:
             raise ValueError(f"{attr_name} must be between 1 and 30")
+
+    # Validate image data if provided
+    if image_data:
+        try:
+            # Validate base64 format
+            if not image_data.startswith('data:image/'):
+                raise ValueError("Image must be a valid data URL")
+            # You can add size limits here if needed
+            if len(image_data) > 5 * 1024 * 1024:  # 5MB limit
+                raise ValueError("Image file too large (max 5MB)")
+        except Exception as e:
+            raise ValueError(f"Invalid image data: {str(e)}")
 
     try:
         # Generate a unique character ID that fits in a 64-bit integer
@@ -73,19 +87,50 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
             f".property('charisma', {charisma_attr.base_score})"
             f".property('charisma_habit_points', {charisma_attr.habit_points})"
         )
+
+        if image_data:
+            # Escape single quotes in base64 data
+            escaped_image_data = image_data.replace("'", "\\'")
+            query += f".property('image_data', '{escaped_image_data}')"
+
         result = run_query(query)
         if not result:
             raise RuntimeError("Failed to create Character vertex")
-        return result
+        return {"character_id: ": character_id, "result: ": result}
     except Exception as e:
         print(f"Error creating Character: {e}")
         raise e
 
-def get_basic_character(character_id: str):
-    # Query by custom property
-    query = f"g.V().hasLabel('Character').has('character_id', '{character_id}').valueMap(true)"
-    result = run_query(query)
-    return result
+
+def update_character_image(character_id: str, image_data: str):
+    """Update character image"""
+    if not character_id or not character_id.strip():
+        raise ValueError("Invalid character ID")
+
+    if not image_data:
+        raise ValueError("Image data is required")
+
+    # Validate image data
+    if not image_data.startswith('data:image/'):
+        raise ValueError("Image must be a valid data URL")
+
+    if len(image_data) > 5 * 1024 * 1024:  # 5MB limit
+        raise ValueError("Image file too large (max 5MB)")
+
+    try:
+        # Escape single quotes in base64 data
+        escaped_image_data = image_data.replace("'", "\\'")
+
+        query = (
+            f"g.V().hasLabel('Character').has('character_id', '{character_id}')"
+            f".property('image_data', '{escaped_image_data}')"
+        )
+
+        result = run_query(query)
+        return {"status": "success", "message": "Image updated successfully"}
+    except Exception as e:
+        print(f"Error updating character image: {e}")
+        raise RuntimeError(f"Failed to update character image: {str(e)}")
 
 def delete_character(character_id: str):
     """
@@ -120,6 +165,7 @@ def get_character(character_id: str):
     # FIXED: Look for character_id in the data (not 'id')
     char_id = extract_value(char_data.get("character_id"))
     name = extract_value(char_data.get("name"))
+    image_data = extract_value(char_data.get("image_data"))
 
     # List the attributes we care about.
     attribute_names = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
@@ -142,6 +188,7 @@ def get_character(character_id: str):
     return {
         "id": char_id,
         "name": name,
+        "image_data": image_data,
         "attributes": attributes,
         # Include additional character properties as needed.
     }
