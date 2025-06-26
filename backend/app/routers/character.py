@@ -1,164 +1,163 @@
-import base64
-import io
-from PIL import Image
-from fastapi import APIRouter, HTTPException, File, UploadFile
+# File: backend/app/routers/character.py
+# Fixed version with correct imports
+
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from app.models.character import (create_character, get_character, delete_character, update_character_habit_score, list_characters, CharacterSummary, update_character_image)
-from app.models.habit import get_all_habits
-
-router = APIRouter(tags=["character"])
-
-class CharacterCreateRequest(BaseModel):
-    name: str
-    strength: int
-    dexterity: int
-    constitution: int
-    intelligence: int
-    wisdom: int
-    charisma: int
-    image_data: str = None
-
-class HabitUpdateRequest(BaseModel):
-    attribute: str # e.g., "strength"
-    habit_points: int
-
-class CharacterImageUpdateRequest(BaseModel):
-    image_data: str  # Base64 image data
-
-"""Character Management Endpoints"""
-# POST endpoint for creating a character
-@router.post("/character", summary="Create a new character")
-def add_character(character: CharacterCreateRequest):
-    try:
-        # Call the model function to create a character node in Neptune
-        result = create_character(
-            character.name,
-            character.strength,
-            character.dexterity,
-            character.constitution,
-            character.intelligence,
-            character.wisdom,
-            character.charisma,
-            character.image_data
-        )
-        return {"status": "success", "data": result}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        print(f"Unexpected error creating character: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-# GET endpoint to retrieve a character by ID
-@router.get("/character/{character_id}", summary="Get a character based on ID")
-def read_character(character_id: str):
-    try:
-        result = get_character(character_id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Character not found")
-        return {"status": "success", "data": result}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        print(f"Unexpected error fetching character: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-# DELETE endpoint to remove a character by ID
-@router.delete("/character/{character_id}", summary="Delete a character by ID")
-def remove_character(character_id: str):
-    result = delete_character(character_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Character not found or deletion failed")
-    return {"status": "success", "data": result}
-
-@router.get(
-    "/characters",
-    response_model=list[CharacterSummary],
-    summary="List all characters",
+from typing import Optional
+from app.models.character import (
+    create_character,
+    get_character,
+    update_character as update_character_db,
+    delete_character,
+    link_habits_with_character
 )
-def read_characters():
-    """
-    Return a list of all Characters, each with its id and name.
-    """
-    return list_characters()
+from app.routers.auth import get_current_user  # Import auth dependency
+from app.models.user import link_character_to_user, get_user_characters
 
-"""Habit Management Endpoints"""
-
-@router.put("/character/{character_id}/habit", summary="Update habit points for an attribute based on ID")
-def update_attribute_habit(character_id: str, habit_update: HabitUpdateRequest):
-    result = update_character_habit_score(character_id, habit_update.attribute, habit_update.habit_points)
-    # If your run_query returns an empty list on success, we can assume the update succeeded.
-    if result is None or (isinstance(result, list) and not result):
-        # You might choose to verify the update with an additional query if needed.
-        return {"status": "success", "message": f"Updated {habit_update.attribute} habit points to {habit_update.habit_points} points"}
-    else:
-        # Otherwise, if the result indicates an error, return an error response.
-        raise HTTPException(status_code=500, detail="Failed to update habit points")
-
-@router.get("/character/{character_id}/habits", summary="Get all habits for a character")
-def read_habits_for_character(character_id: str):
-    habits = get_all_habits(character_id)
-    if not habits:
-        return {"status": "success", "data": [], "message": "No Habits have been created for this Character"}  # Empty is valid
-    return { "status": "success", "data": habits }
+router = APIRouter(prefix="/api/character", tags=["character"])
 
 
+class CharacterCreate(BaseModel):
+    name: str
+    strength: int = 10
+    dexterity: int = 10
+    constitution: int = 10
+    intelligence: int = 10
+    wisdom: int = 10
+    charisma: int = 10
+    image_data: Optional[str] = None
 
 
-"""Image Management Endpoints"""
+class CharacterUpdate(BaseModel):
+    image_data: Optional[str] = None
 
-# Alternative file upload endpoint (if you prefer file uploads over base64)
-@router.post("/character/{character_id}/upload-image", summary="Upload character image file")
-async def upload_character_image(character_id: str, file: UploadFile = File(...)):
+
+@router.post("")
+def create_new_character(
+        character: CharacterCreate,
+        current_user: dict = Depends(get_current_user)
+):
+    """Create a new character for the authenticated user"""
     try:
-        # Validate file type
-        if not file.content_type.startswith('image/'):
-            raise HTTPException(status_code=400, detail="File must be an image")
+        # Check character limit for free users
+        if not current_user.get("is_premium", False):
+            existing_characters = get_user_characters(current_user["user_id"])
+            if len(existing_characters) >= 3:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Free users can only create up to 3 characters. Upgrade to premium for unlimited characters."
+                )
 
-        # Validate file size (5MB limit)
-        content = await file.read()
-        if len(content) > 5 * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="Image file too large (max 5MB)")
+        # Create the character
+        character_id = create_character(
+            name=character.name,
+            strength=character.strength,
+            dexterity=character.dexterity,
+            constitution=character.constitution,
+            intelligence=character.intelligence,
+            wisdom=character.wisdom,
+            charisma=character.charisma,
+            image_data=character.image_data
+        )
 
-        # Optional: Resize image if too large
-        try:
-            image = Image.open(io.BytesIO(content))
+        # Link character to user
+        link_success = link_character_to_user(current_user["user_id"], character_id)
+        if not link_success:
+            # If linking fails, delete the character
+            delete_character(character_id)
+            raise HTTPException(status_code=500, detail="Failed to link character to user")
 
-            # Resize if larger than 800x800
-            max_size = (800, 800)
-            if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
-                image.thumbnail(max_size, Image.Resampling.LANCZOS)
+        # Link any existing habits to the new character
+        link_habits_with_character(character_id)
 
-                # Convert back to bytes
-                img_byte_arr = io.BytesIO()
-                image.save(img_byte_arr, format=image.format)
-                content = img_byte_arr.getvalue()
+        return {"status": "success", "character_id": character_id}
 
-        except Exception as e:
-            raise HTTPException(status_code=400, detail="Invalid image file")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Error creating character: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create character")
 
-        # Convert to base64 data URL
-        base64_data = base64.b64encode(content).decode('utf-8')
-        image_data_url = f"data:{file.content_type};base64,{base64_data}"
 
-        # Update character with image
-        result = update_character_image(character_id, image_data_url)
-        return {"status": "success", "message": "Image uploaded successfully"}
+@router.get("/user/characters")
+def get_current_user_characters(current_user: dict = Depends(get_current_user)):
+    """Get all characters for the authenticated user"""
+    try:
+        characters = get_user_characters(current_user["user_id"])
+        return {"status": "success", "data": characters}
+    except Exception as e:
+        print(f"Error fetching user characters: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch characters")
+
+
+@router.get("/{character_id}")
+def read_character(character_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a specific character (only if owned by user)"""
+    try:
+        # Verify user owns this character
+        user_characters = get_user_characters(current_user["user_id"])
+        if not any(char["character_id"] == character_id for char in user_characters):
+            raise HTTPException(status_code=403, detail="You don't have access to this character")
+
+        character = get_character(character_id)
+        if character:
+            return {"status": "success", "data": character}
+        else:
+            raise HTTPException(status_code=404, detail="Character not found")
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Unexpected error uploading image: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        print(f"Error fetching character: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch character")
 
 
-# PUT endpoint for updating character image
-@router.put("/character/{character_id}/image", summary="Update character image")
-def update_character_image_endpoint(character_id: str, image_request: CharacterImageUpdateRequest):
+@router.put("/{character_id}")
+def update_character(
+        character_id: str,
+        update_data: CharacterUpdate,
+        current_user: dict = Depends(get_current_user)
+):
+    """Update a character (only if owned by user)"""
     try:
-        result = update_character_image(character_id, image_request.image_data)
-        return {"status": "success", "message": "Image updated successfully"}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Verify user owns this character
+        user_characters = get_user_characters(current_user["user_id"])
+        if not any(char["character_id"] == character_id for char in user_characters):
+            raise HTTPException(status_code=403, detail="You don't have access to this character")
+
+        updated = update_character_db(character_id, update_data.image_data)
+        if updated:
+            return {"status": "success", "message": "Character updated"}
+        else:
+            raise HTTPException(status_code=404, detail="Character not found")
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Unexpected error updating image: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        print(f"Error updating character: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update character")
+
+
+@router.delete("/{character_id}")
+def delete_character_endpoint(
+        character_id: str,
+        current_user: dict = Depends(get_current_user)
+):
+    """Delete a character (only if owned by user)"""
+    try:
+        # Verify user owns this character
+        user_characters = get_user_characters(current_user["user_id"])
+        if not any(char["character_id"] == character_id for char in user_characters):
+            raise HTTPException(status_code=403, detail="You don't have access to this character")
+
+        success = delete_character(character_id)
+        if success:
+            return {"status": "success", "message": "Character deleted"}
+        else:
+            raise HTTPException(status_code=404, detail="Character not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting character: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete character")

@@ -1,4 +1,7 @@
 # backend/app/models/character.py
+
+# TODO Update character.py to remove user-specific filtering from get_all_characters
+# TODO This function should now only be used internally, not exposed via API
 import base64
 import uuid
 from gremlin_python.process.traversal import T
@@ -100,6 +103,44 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
     except Exception as e:
         print(f"Error creating Character: {e}")
         raise e
+
+
+def update_character(character_id: str, image_data: str = None) -> bool:
+    """
+    Update a character's image data
+    """
+    try:
+        if image_data:
+            # Validate image data format
+            if not image_data.startswith('data:image/'):
+                raise ValueError("Invalid image data format")
+
+            # Update the character's image
+            query = (
+                f"g.V().hasLabel('Character')"
+                f".has('character_id', '{character_id}')"
+                f".property('image_data', '{image_data}')"
+            )
+            run_query(query)
+
+        return True
+
+    except Exception as e:
+        print(f"Error updating character {character_id}: {e}")
+        return False
+
+
+def link_habits_with_character(character_id: str):
+    """
+    Link any orphaned habits to a character
+    This is mainly for backwards compatibility
+    """
+    try:
+        # This function can be empty for now since new habits
+        # are created with character_id already
+        pass
+    except Exception as e:
+        print(f"Error linking habits with character: {e}")
 
 
 def update_character_image(character_id: str, image_data: str):

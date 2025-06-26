@@ -2,13 +2,19 @@
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 from fastapi.responses import HTMLResponse
-from app.routers import character, habit, completion, adventure, enemy  # Add enemy import
-from app.neptune_client import run_query
+from app.routers import character, habit, completion, adventure, enemy, auth
+from app.neptune_client import run_query, init_neptune_client, close_neptune_client
 import os
 
-# Get allowed origins from environment
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("Starting up...")
+    init_neptune_client()
+    yield
+    print("Shutting down...")
+    close_neptune_client()
 
 app = FastAPI(
     title="Habits Adventure API",
@@ -16,6 +22,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+# Get allowed origins from environment
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -30,8 +39,8 @@ app.include_router(character.router, prefix="/api")
 app.include_router(habit.router, prefix="/api")
 app.include_router(completion.router, prefix="/api")
 app.include_router(adventure.router, prefix="/api")
-app.include_router(enemy.router, prefix="/api")  # Add enemy router
-
+app.include_router(enemy.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 
 @app.get("/")
 def read_root():

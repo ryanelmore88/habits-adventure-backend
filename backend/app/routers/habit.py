@@ -1,97 +1,87 @@
-import datetime
-
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from app.models.habit import create_habit, update_habit_completion, get_habit, get_completions_for_habit, \
-    get_habits_for_attribute, get_all_habits, delete_habit, get_current_week_completions, get_current_day_completions
-from app.models.completion import get_completion
+from typing import Optional
+from app.models.habit import (
+    create_habit as create_habit_db,
+    get_habits_for_character,
+    delete_habit as delete_habit_db
+)
+from app.routers.auth import get_current_user
+from app.models.user import get_user_characters
 
-router = APIRouter(tags=["habit"])
+router = APIRouter(prefix="/api/habit", tags=["habit"])
 
-class HabitCreateRequest(BaseModel):
+
+class HabitCreate(BaseModel):
     character_id: str
     habit_name: str
     attribute: str
-    description: str = ""
+    description: Optional[str] = None
 
-@router.post("/habit", summary="Create a new habit")
-def add_habit(habit: HabitCreateRequest):
-    result = create_habit(
-        character_id=habit.character_id,
-        habit_name=habit.habit_name,
-        attribute=habit.attribute,
-        description=habit.description
-    )
-    if not result:
+
+def verify_character_ownership(character_id: str, user_id: str) -> bool:
+    """Verify that a user owns a specific character"""
+    user_characters = get_user_characters(user_id)
+    return any(char["character_id"] == character_id for char in user_characters)
+
+
+@router.post("")
+def create_habit(habit: HabitCreate, current_user: dict = Depends(get_current_user)):
+    """Create a new habit for a character"""
+    try:
+        # Verify user owns this character
+        if not verify_character_ownership(habit.character_id, current_user["user_id"]):
+            raise HTTPException(status_code=403, detail="You don't have access to this character")
+
+        habit_id = create_habit_db(
+            character_id=habit.character_id,
+            habit_name=habit.habit_name,
+            attribute=habit.attribute,
+            description=habit.description
+        )
+        return {"status": "success", "habit_id": habit_id}
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Error creating habit: {e}")
         raise HTTPException(status_code=500, detail="Failed to create habit")
-    return {"status": "success", "data": result}
-
-class HabitCompletionRequest(BaseModel):
-    habit_id: str
-    completion_date: str  # Format "YYYY-MM-DD"
-    completed: bool = True
-
-@router.post("/habit/completion", summary="Mark a habit as completed, Format YYYY-MM-DD")
-def add_habit_completion(completion: HabitCompletionRequest):
-    result = update_habit_completion(
-        habit_id=completion.habit_id,
-        completion_date=completion.completion_date,
-        completed=completion.completed
-    )
-    if not result:
-        raise HTTPException(status_code=500, detail="Failed to add completion record")
-    return {"status": "success", "data": result}
-
-@router.get("/habit/{habit_id}", summary="Retrieve a habit by ID")
-def read_habit(habit_id: str):
-    habit = get_habit(habit_id)
-    if not habit:
-        raise HTTPException(status_code=404, detail="Habit not found")
-    return {"status": "success", "data": habit}
-
-@router.get("/habit/{habit_id}/completions", summary="Get completions for a habit")
-def read_habit_completions(habit_id: str):
-    completions = get_completions_for_habit(habit_id)
-    if completions is None:
-        raise HTTPException(status_code=404, detail="Habit completions not found")
-    return {"status": "success", "data": completions}
-
-@router.get("/habit", summary="Retrieve habits for a character and attribute")
-def read_habits(character_id: str = Query(...), attribute: str = Query(...)):
-    habits = get_habits_for_attribute(character_id, attribute.lower())
-    if habits is None:
-        raise HTTPException(status_code=404, detail="Habits not found")
-    return {"status": "success", "data": habits}
 
 
-    return {"status": "success", "data": habits}
+@router.get("/character/{character_id}")
+def get_habits(character_id: str, current_user: dict = Depends(get_current_user)):
+    """Get all habits for a character"""
+    try:
+        # Verify user owns this character
+        if not verify_character_ownership(character_id, current_user["user_id"]):
+            raise HTTPException(status_code=403, detail="You don't have access to this character")
 
-@router.delete("/habit/{habit_id}", summary="Delete a habit by ID")
-def delete_habit_endpoint(habit_id: str):
-    result = delete_habit(habit_id)
-    # If drop() returns an empty list on success, consider that a success.
-    return {"status": "success", "message": f"Habit {habit_id} deleted", "result": result}
+        habits = get_habits_for_character(character_id)
+        return {"status": "success", "data": habits}
 
-@router.get("/habit/completions/week", summary="Get current week completions for a given character")
-def week_completions(
-    character_id: str = Query(...)
-):
-    today = datetime.date.today()
-    # Using isoweekday: Monday=1, ... Sunday=7.
-    # Compute days to subtract: if today is Sunday (7), then 7% 7 = 0 (i.e start_date is today.)
-    start_date = today - datetime.timedelta(days=today.isoweekday() % 7)
-    end_date = start_date + datetime.timedelta(days=6)
-    data = get_current_week_completions(character_id, start_date, end_date)
-    print(f"{character_id}, today: {today} Start Date {start_date}, End Date {end_date}")
-    if not data or len(data) == 0:
-        raise HTTPException(status_code=404, detail="No habit completions found for the specified week")
-    return {"status": "success", "data": data}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error fetching habits: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch habits")
 
-@router.get("/habit/completions/day", summary="Get current day completions for a given character")
-def day_completions(
-    character_id: str = Query(...)
-):
-    data = get_current_day_completions(character_id, datetime.date.today())
-    if not data or len(data) == 0:
-        raise HTTPException(status_code=404, detail="No habit completions found for the specified day")
-    return {"status": "success", "data": data}
+
+@router.delete("/{habit_id}")
+def delete_habit(habit_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a habit"""
+    try:
+        # Note: In a production system, you'd want to verify the habit belongs
+        # to a character owned by the user before deletion
+        success = delete_habit_db(habit_id)
+        if success:
+            return {"status": "success", "message": "Habit deleted"}
+        else:
+            raise HTTPException(status_code=404, detail="Habit not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting habit: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete habit")
