@@ -280,6 +280,29 @@ def get_current_week_completions(character_id: str, start_date: datetime, end_da
     return result or []
 
 
+def get_habits_for_character(character_id: str):
+    """
+    Get all habits for a character - compatibility function for the auth router
+    This function provides the interface expected by the new authenticated router
+    """
+    if not character_id or not character_id.strip():
+        raise ValueError("Character ID cannot be empty")
+
+    try:
+        # Use the existing function that gets all habits with completions
+        return get_all_habits_with_completions(character_id)
+    except Exception as e:
+        print(f"Error getting habits for character {character_id}: {e}")
+        raise e
+
+def get_habit_by_id(habit_id: str):
+    """
+    Retrieve a habit by its ID
+    This is an alias for get_habit for clarity
+    """
+    return get_habit(habit_id)
+
+
 def get_current_day_completions(character_id: str, today: datetime):
     """
     Get habit completions for a character for a specific day

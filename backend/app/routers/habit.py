@@ -1,10 +1,14 @@
+# File: backend/app/routers/habit.py
+# Update habit router to require authentication
+
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from app.models.habit import (
     create_habit as create_habit_db,
-    get_habits_for_character,
-    delete_habit as delete_habit_db
+    get_all_habits,
+    delete_habit as delete_habit_db,
+    get_habit_by_id
 )
 from app.routers.auth import get_current_user
 from app.models.user import get_user_characters
@@ -33,13 +37,13 @@ def create_habit(habit: HabitCreate, current_user: dict = Depends(get_current_us
         if not verify_character_ownership(habit.character_id, current_user["user_id"]):
             raise HTTPException(status_code=403, detail="You don't have access to this character")
 
-        habit_id = create_habit_db(
+        result = create_habit_db(
             character_id=habit.character_id,
             habit_name=habit.habit_name,
             attribute=habit.attribute,
             description=habit.description
         )
-        return {"status": "success", "habit_id": habit_id}
+        return {"status": "success", "habit_id": result["habit_id"], "data": result}
 
     except HTTPException:
         raise
@@ -58,7 +62,7 @@ def get_habits(character_id: str, current_user: dict = Depends(get_current_user)
         if not verify_character_ownership(character_id, current_user["user_id"]):
             raise HTTPException(status_code=403, detail="You don't have access to this character")
 
-        habits = get_habits_for_character(character_id)
+        habits = get_all_habits(character_id)
         return {"status": "success", "data": habits}
 
     except HTTPException:
@@ -72,13 +76,16 @@ def get_habits(character_id: str, current_user: dict = Depends(get_current_user)
 def delete_habit(habit_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a habit"""
     try:
-        # Note: In a production system, you'd want to verify the habit belongs
-        # to a character owned by the user before deletion
-        success = delete_habit_db(habit_id)
-        if success:
-            return {"status": "success", "message": "Habit deleted"}
-        else:
+        # Verify the habit belongs to a character owned by the user
+        habit = get_habit_by_id(habit_id)
+        if not habit:
             raise HTTPException(status_code=404, detail="Habit not found")
+
+        if not verify_character_ownership(habit["character_id"], current_user["user_id"]):
+            raise HTTPException(status_code=403, detail="You don't have access to this habit")
+
+        result = delete_habit_db(habit_id)
+        return {"status": "success", "message": "Habit deleted", "data": result}
 
     except HTTPException:
         raise

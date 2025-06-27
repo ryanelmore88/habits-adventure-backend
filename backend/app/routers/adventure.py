@@ -1,10 +1,12 @@
 # backend/app/routers/adventure.py
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, List, Optional
 from pydantic import BaseModel
 from app.models.character import get_character, update_character_hp
 from app.neptune_client import run_query
+from app.routers.auth import get_current_user
+from app.models.user import get_user_characters
 
 router = APIRouter(prefix="/adventure", tags=["adventure"])
 
@@ -28,6 +30,12 @@ class AdventureResponse(BaseModel):
     status: str
     message: str
     rewards: Dict[str, int]
+
+# Add this function after imports:
+def verify_character_ownership(character_id: str, user_id: str) -> bool:
+    """Verify that a user owns a specific character"""
+    user_characters = get_user_characters(user_id)
+    return any(char["character_id"] == character_id for char in user_characters)
 
 
 # Helper functions
@@ -169,12 +177,20 @@ def validate_adventure_results(results: dict) -> dict:
 
 # API Endpoints
 @router.post("/{character_id}/complete", response_model=AdventureResponse)
-def complete_adventure(character_id: str, results: AdventureResults) -> AdventureResponse:
+def complete_adventure(
+    character_id: str,
+    results: AdventureResults,
+    current_user: dict = Depends(get_current_user)
+) -> AdventureResponse:
     """
     Called once when adventure is complete
     Updates character HP, XP, and inventory
     """
     try:
+
+        # Verify user owns this character
+        if not verify_character_ownership(character_id, current_user["user_id"]):
+            raise HTTPException(status_code=403, detail="You don't have access to this character")
         # Validate character exists
         character = get_character(character_id)
         if not character:

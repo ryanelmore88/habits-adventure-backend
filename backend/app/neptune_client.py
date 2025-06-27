@@ -4,12 +4,14 @@ import os
 
 from typing import List, Any
 from gremlin_python.driver import client, serializer
+from pydantic.v1.networks import host_regex
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Get the Neptune endpoint from an environment variable or hardcode for development.
 NEPTUNE_ENDPOINT = os.getenv("NEPTUNE_ENDPOINT", "ws://localhost:8182/gremlin")
+NEPTUNE_PORT = os.getenv("NEPTUNE_PORT", 8182)
 
 # Create a Gremlin client using GraphSON v2 serializer
 gremlin_client = client.Client(NEPTUNE_ENDPOINT, 'g',
@@ -71,3 +73,29 @@ def debug_full_path(character_id: str):
     result = run_query(query)
     print(f"Full path for character {character_id}: {result}")
     return result
+
+
+def init_neptune_client():
+    """Initialize the Gremlin client."""
+    global neptune_client
+    host = NEPTUNE_ENDPOINT
+    port = NEPTUNE_PORT
+    url = f"ws://{host}:{port}/gremlin"
+
+    neptune_client = client.Client(
+        url,
+        'g',
+        username="",
+        password="",
+        message_serializer=serializer.GraphSONSerializersV3d0()()
+    )
+    print(f"Gremlin client initialized: {url}")
+
+
+def close_neptune_client():
+    global neptune_client
+    if neptune_client:
+        neptune_client.close()
+        print(f"Neptune client closed")
+    neptune_client = None
+
