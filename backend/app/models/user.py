@@ -1,11 +1,11 @@
 # File: backend/app/models/user.py
-# Fixed user model with correct imports
+# Updated with debug logging and user creation in Neptune
 
 import bcrypt
 import uuid
 from typing import Optional, Dict
 from datetime import datetime
-from app.neptune_client import run_query  # Remove get_neptune_client
+from app.neptune_client import run_query
 import json
 
 
@@ -26,6 +26,39 @@ class User:
     def verify_password(password: str, hashed: str) -> bool:
         """Verify password against hash"""
         return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+
+def create_user_in_neptune(user_id: str, email: str) -> bool:
+    """Create a user node in Neptune Graph"""
+    try:
+        print(f"Creating user in Neptune: {user_id}, {email}")
+
+        # Check if user already exists
+        check_query = f"g.V().hasLabel('User').has('user_id', '{user_id}').count()"
+        existing_count = run_query(check_query)
+        print(f"Existing user count: {existing_count}")
+
+        if existing_count and existing_count[0] > 0:
+            print(f"User {user_id} already exists in Neptune")
+            return True
+
+        query = (
+            f"g.addV('User')"
+            f".property('user_id', '{user_id}')"
+            f".property('email', '{email}')"
+            f".property('created_at', '{datetime.utcnow().isoformat()}')"
+            f".property('is_active', true)"
+            f".property('is_premium', false)"
+            f".elementMap()"
+        )
+
+        result = run_query(query)
+        print(f"User creation result: {result}")
+        return True
+
+    except Exception as e:
+        print(f"Error creating user in Neptune: {e}")
+        return False
 
 
 def create_user(email: str, password: str) -> Optional[Dict]:
@@ -112,13 +145,34 @@ def get_user_by_id(user_id: str) -> Optional[Dict]:
 def link_character_to_user(user_id: str, character_id: str) -> bool:
     """Create ownership edge between user and character"""
     try:
+        print(f"Linking character {character_id} to user {user_id}")
+
+        # First ensure the user exists in Neptune
+        user_exists = get_user_by_id(user_id)
+        if not user_exists:
+            print(f"User {user_id} doesn't exist in Neptune, creating...")
+            # We need email, but we don't have it here. This is the problem!
+            # For now, let's create a minimal user node
+            create_query = (
+                f"g.addV('User')"
+                f".property('user_id', '{user_id}')"
+                f".property('email', 'temp@example.com')"  # Temporary email
+                f".property('created_at', '{datetime.utcnow().isoformat()}')"
+                f".property('is_active', true)"
+                f".property('is_premium', false)"
+            )
+            run_query(create_query)
+            print(f"Created user node for {user_id}")
+
+        # Now create the ownership edge
         query = (
             f"g.V().hasLabel('User').has('user_id', '{user_id}')"
             f".addE('owns')"
             f".to(V().hasLabel('Character').has('character_id', '{character_id}'))"
         )
 
-        run_query(query)
+        result = run_query(query)
+        print(f"Link creation result: {result}")
         return True
 
     except Exception as e:
@@ -129,15 +183,39 @@ def link_character_to_user(user_id: str, character_id: str) -> bool:
 def get_user_characters(user_id: str) -> list:
     """Get all characters owned by a user"""
     try:
+        print(f"Getting characters for user: {user_id}")
+
+        # First check if user exists
+        user_check_query = f"g.V().hasLabel('User').has('user_id', '{user_id}').count()"
+        user_count = run_query(user_check_query)
+        print(f"User count in Neptune: {user_count}")
+
+        if not user_count or user_count[0] == 0:
+            print(f"User {user_id} not found in Neptune!")
+            return []
+
+        # Debug: Check all User nodes
+        all_users_query = "g.V().hasLabel('User').elementMap()"
+        all_users = run_query(all_users_query)
+        print(f"All users in Neptune: {[user.get('user_id') for user in all_users]}")
+
+        # Debug: Check ownership edges from this user
+        edges_query = f"g.V().hasLabel('User').has('user_id', '{user_id}').outE('owns').count()"
+        edge_count = run_query(edges_query)
+        print(f"Ownership edges from user {user_id}: {edge_count}")
+
         query = (
             f"g.V().hasLabel('User').has('user_id', '{user_id}')"
             f".out('owns').hasLabel('Character').elementMap()"
         )
 
         result = run_query(query)
+        print(f"Characters query result: {result}")
+
         characters = []
 
         for char_data in result:
+            print(f"Processing character data: {char_data}")
             characters.append({
                 "character_id": char_data.get('character_id'),
                 "name": char_data.get('name'),
@@ -146,6 +224,7 @@ def get_user_characters(user_id: str) -> list:
                 "image_data": char_data.get('image_data')
             })
 
+        print(f"Returning {len(characters)} characters")
         return characters
 
     except Exception as e:

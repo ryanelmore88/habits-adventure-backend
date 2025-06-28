@@ -62,7 +62,19 @@ def create_enemy_templates():
             "environment": ["swamps", "mountains", "deep_caves"]
         },
         {
-            "enemy_id": "template_dragon",
+            "enemy_id": "template_dark_knight",
+            "name": "Dark Knight",
+            "level": 4,
+            "max_hp": 65,
+            "dice_pool": "4d6",
+            "xp_reward": 150,
+            "loot_table": ["armor"],
+            "description": "A fallen paladin clad in blackened plate armor.",
+            "difficulty": "Hard",
+            "environment": ["swamps", "mountains", "deep_caves"]
+        },
+        {
+            "enemy_id": "template_young_dragon",
             "name": "Young Dragon",
             "level": 5,
             "max_hp": 84,
@@ -70,6 +82,18 @@ def create_enemy_templates():
             "xp_reward": 400,
             "loot_table": ["dragon_scale", "gold", "gem"],
             "description": "A young but powerful dragon with scales that gleam like metal.",
+            "difficulty": "Legendary",
+            "environment": ["mountains", "deep_caves", "ancient_ruins"]
+        },
+        {
+            "enemy_id": "template_ancient_dragon",
+            "name": "Ancient Dragon",
+            "level": 10,
+            "max_hp": 200,
+            "dice_pool": "20d12",
+            "xp_reward": 4000,
+            "loot_table": ["dragon_scale", "gold", "gem"],
+            "description": "A massive, ancient dragon with scales like molten metal..",
             "difficulty": "Legendary",
             "environment": ["mountains", "deep_caves", "ancient_ruins"]
         }
