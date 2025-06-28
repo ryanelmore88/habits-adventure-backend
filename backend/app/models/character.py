@@ -36,6 +36,7 @@ def list_characters() -> list[CharacterSummary]:
         )
     return summaries
 
+
 def create_character(name: str, strength: int, dexterity: int, constitution: int,
                      intelligence: int, wisdom: int, charisma: int, image_data: str = None):
     # Add input validation
@@ -58,25 +59,32 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
             if len(image_data) > 5 * 1024 * 1024:  # 5MB limit
                 raise ValueError("Image file too large (max 5MB)")
         except Exception as e:
-            raise ValueError(f"Invalid image data: {str(e)}")
+            raise ValueError("Invalid image data provided")
 
     try:
-        # Generate a unique character ID that fits in a 64-bit integer
         character_id = generate_character_id()
 
-        # Create an Attribute instance for each parameter
-        strength_attr = Attribute('strength', strength)
-        dexterity_attr = Attribute('dexterity', dexterity)
-        constitution_attr = Attribute('constitution', constitution)
-        intelligence_attr = Attribute('intelligence', intelligence)
-        wisdom_attr = Attribute('wisdom', wisdom)
-        charisma_attr = Attribute('charisma', charisma)
+        # Build the base attributes using your Attribute class
+        strength_attr = Attribute(strength, 0)  # base_score, habit_points
+        dexterity_attr = Attribute(dexterity, 0)
+        constitution_attr = Attribute(constitution, 0)
+        intelligence_attr = Attribute(intelligence, 0)
+        wisdom_attr = Attribute(wisdom, 0)
+        charisma_attr = Attribute(charisma, 0)
 
-        # Build the Gremlin query string for creating a Character vertex
+        # Calculate HP based on constitution (D&D style: 10 + CON modifier)
+        max_hp = 10 + constitution_attr.get_bonus()
+        current_hp = max_hp
+
+        # Build the Gremlin query to create the character vertex
         query = (
             f"g.addV('Character')"
-            f".property('name', '{name}')"
             f".property('character_id', '{character_id}')"
+            f".property('name', '{name}')"
+            f".property('level', 1)"
+            f".property('current_xp', 0)"
+            f".property('current_hp', {current_hp})"
+            f".property('max_hp', {max_hp})"
             f".property('strength', {strength_attr.base_score})"
             f".property('strength_habit_points', {strength_attr.habit_points})"
             f".property('dexterity', {dexterity_attr.base_score})"
@@ -99,7 +107,10 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
         result = run_query(query)
         if not result:
             raise RuntimeError("Failed to create Character vertex")
-        return {"character_id: ": character_id, "result: ": result}
+
+        # FIXED: Return correct format without trailing spaces/colons
+        return character_id  # Return just the character_id string, not a dict
+
     except Exception as e:
         print(f"Error creating Character: {e}")
         raise e

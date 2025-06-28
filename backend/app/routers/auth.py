@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timedelta
 
 # You'll need to install PyJWT: pip install PyJWT
-router = APIRouter(prefix="/api/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["authentication"])
 
 # Security scheme
 security = HTTPBearer()

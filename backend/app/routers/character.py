@@ -1,5 +1,5 @@
 # File: backend/app/routers/character.py
-# Fixed version with correct imports
+# Fixed version with proper character_id handling
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
@@ -14,7 +14,7 @@ from app.models.character import (
 from app.routers.auth import get_current_user  # Import auth dependency
 from app.models.user import link_character_to_user, get_user_characters
 
-router = APIRouter(prefix="/api/character", tags=["character"])
+router = APIRouter(prefix="/character", tags=["character"])
 
 
 class CharacterCreate(BaseModel):
@@ -25,7 +25,7 @@ class CharacterCreate(BaseModel):
     intelligence: int = 10
     wisdom: int = 10
     charisma: int = 10
-    image_data: Optional[str] = None
+    # image_data: Optional[str] = None
 
 
 class CharacterUpdate(BaseModel):
@@ -45,10 +45,11 @@ def create_new_character(
             if len(existing_characters) >= 3:
                 raise HTTPException(
                     status_code=403,
-                    detail="Free users can only create up to 3 characters. Upgrade to premium for unlimited characters."
+                    detail="Free users can only create up to 3 characters. "
+                           "Upgrade to premium for unlimited characters."
                 )
 
-        # Create the character
+        # Create the character - FIXED: now returns just character_id string
         character_id = create_character(
             name=character.name,
             strength=character.strength,
@@ -57,10 +58,10 @@ def create_new_character(
             intelligence=character.intelligence,
             wisdom=character.wisdom,
             charisma=character.charisma,
-            image_data=character.image_data
+            # image_data=character.image_data
         )
 
-        # Link character to user
+        # FIXED: character_id is now a string, not a dict
         link_success = link_character_to_user(current_user["user_id"], character_id)
         if not link_success:
             # If linking fails, delete the character

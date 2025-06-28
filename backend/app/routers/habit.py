@@ -13,7 +13,7 @@ from app.models.habit import (
 from app.routers.auth import get_current_user
 from app.models.user import get_user_characters
 
-router = APIRouter(prefix="/api/habit", tags=["habit"])
+router = APIRouter(prefix="/habit", tags=["habit"])
 
 
 class HabitCreate(BaseModel):

@@ -14,7 +14,7 @@ from app.models.habit import (
 from app.routers.auth import get_current_user
 from app.models.user import get_user_characters
 
-router = APIRouter(prefix="/api/habit", tags=["completion"])
+router = APIRouter(prefix="/habit", tags=["completion"])
 
 
 class CompletionMark(BaseModel):
