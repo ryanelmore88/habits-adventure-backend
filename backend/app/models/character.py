@@ -64,16 +64,17 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
     try:
         character_id = generate_character_id()
 
-        # Build the base attributes using your Attribute class
-        strength_attr = Attribute(strength, 0)  # base_score, habit_points
-        dexterity_attr = Attribute(dexterity, 0)
-        constitution_attr = Attribute(constitution, 0)
-        intelligence_attr = Attribute(intelligence, 0)
-        wisdom_attr = Attribute(wisdom, 0)
-        charisma_attr = Attribute(charisma, 0)
+        # FIXED: Build the base attributes using correct Attribute constructor
+        # Attribute(name: str, base_score: int, habit_points: int = 0)
+        strength_attr = Attribute("strength", strength, 0)
+        dexterity_attr = Attribute("dexterity", dexterity, 0)
+        constitution_attr = Attribute("constitution", constitution, 0)
+        intelligence_attr = Attribute("intelligence", intelligence, 0)
+        wisdom_attr = Attribute("wisdom", wisdom, 0)
+        charisma_attr = Attribute("charisma", charisma, 0)
 
         # Calculate HP based on constitution (D&D style: 10 + CON modifier)
-        max_hp = 10 + constitution_attr.get_bonus()
+        max_hp = 10 + constitution_attr.calculate_base_bonus()
         current_hp = max_hp
 
         # Build the Gremlin query to create the character vertex
@@ -108,8 +109,8 @@ def create_character(name: str, strength: int, dexterity: int, constitution: int
         if not result:
             raise RuntimeError("Failed to create Character vertex")
 
-        # FIXED: Return correct format without trailing spaces/colons
-        return character_id  # Return just the character_id string, not a dict
+        # Return just the character_id string
+        return character_id
 
     except Exception as e:
         print(f"Error creating Character: {e}")

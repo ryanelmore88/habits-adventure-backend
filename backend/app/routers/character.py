@@ -1,5 +1,5 @@
 # File: backend/app/routers/character.py
-# Fixed version with proper character_id handling
+# Fixed router prefix - should be "/api/character" not just "/character"
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
@@ -14,6 +14,7 @@ from app.models.character import (
 from app.routers.auth import get_current_user  # Import auth dependency
 from app.models.user import link_character_to_user, get_user_characters
 
+# FIXED: Use "/character" prefix since main.py already adds "/api"
 router = APIRouter(prefix="/character", tags=["character"])
 
 
@@ -25,7 +26,7 @@ class CharacterCreate(BaseModel):
     intelligence: int = 10
     wisdom: int = 10
     charisma: int = 10
-    # image_data: Optional[str] = None
+    image_data: Optional[str] = None
 
 
 class CharacterUpdate(BaseModel):
@@ -49,7 +50,7 @@ def create_new_character(
                            "Upgrade to premium for unlimited characters."
                 )
 
-        # Create the character - FIXED: now returns just character_id string
+        # Create the character
         character_id = create_character(
             name=character.name,
             strength=character.strength,
@@ -58,10 +59,10 @@ def create_new_character(
             intelligence=character.intelligence,
             wisdom=character.wisdom,
             charisma=character.charisma,
-            # image_data=character.image_data
+            image_data=character.image_data
         )
 
-        # FIXED: character_id is now a string, not a dict
+        # Link character to user
         link_success = link_character_to_user(current_user["user_id"], character_id)
         if not link_success:
             # If linking fails, delete the character

@@ -113,9 +113,9 @@ def link_character_to_user(user_id: str, character_id: str) -> bool:
     """Create ownership edge between user and character"""
     try:
         query = (
-            f"g.V().hasLabel('User').has('user_id', '{user_id}').as('u')"
-            f".V().hasLabel('Character').has('character_id', '{character_id}').as('c')"
-            f".addE('owns').from('u').to('c')"
+            f"g.V().hasLabel('User').has('user_id', '{user_id}')"
+            f".addE('owns')"
+            f".to(V().hasLabel('Character').has('character_id', '{character_id}'))"
         )
 
         run_query(query)
