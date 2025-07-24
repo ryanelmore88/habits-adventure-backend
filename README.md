@@ -1,5 +1,11 @@
 # Habits Adventure Backend
 
+To logon to the ec2 instance:
+
+'''
+ssh -i "acm-root.pem" ec2-user@ec2-44-203-186-167.compute-1.amazonaws.com
+'''
+
 A Python FastAPI service that manages characters, habits, and habit‑driven RPG mechanics backed by a Gremlin graph database (Amazon Neptune, local Gremlin Server, etc).
 
 ## Features
